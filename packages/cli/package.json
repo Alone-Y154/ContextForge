@@ -1,0 +1,26 @@
+{
+  "name": "contextforge",
+  "version": "0.1.0",
+  "type": "module",
+  "bin": {
+    "contextforge": "dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "build": "tsup src/index.ts --format esm --dts --clean",
+    "test": "vitest --passWithNoTests"
+  },
+  "dependencies": {
+    "@contextforge/core": "workspace:*",
+    "@inquirer/prompts": "^7.8.0",
+    "commander": "^14.0.0",
+    "ora": "^8.2.0",
+    "picocolors": "^1.1.1"
+  },
+  "devDependencies": {
+    "tsx": "^4.20.0"
+  }
+}
