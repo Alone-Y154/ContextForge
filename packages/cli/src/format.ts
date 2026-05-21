@@ -56,7 +56,7 @@ export function formatDoctorReport(report: DoctorReport): string {
     lines.push(`${marker} ${issue.message}`);
   }
 
-  lines.push("", "Run:", "npx contextforge sync");
+  lines.push("", "Run:", "npx @contextforge/cli sync");
 
   return lines.join("\n");
 }

@@ -24,16 +24,18 @@ contextforge-registry/
       copilot.md
 ```
 
+The initial `index.json` comes from you. It is just a static file at the root of that registry repo. You can start from [registry-index.example.json](registry-index.example.json), copy it into the registry repo as `index.json`, and then remove any pack entries that you have not created yet.
+
 Deploy that repo to:
 
 ```txt
-https://registry.contextforge.dev/
+https://registry.contextforge.org/
 ```
 
 The CLI already points the `official` registry alias to:
 
 ```txt
-https://registry.contextforge.dev/index.json
+https://registry.contextforge.org/index.json
 ```
 
 ## Minimal Supabase Pack
@@ -75,7 +77,7 @@ Then add to `index.json`:
 After deployment, this should work:
 
 ```bash
-npx contextforge add supabase
+npx @contextforge/cli add supabase
 ```
 
 ## Hosting Options

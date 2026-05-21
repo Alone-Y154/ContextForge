@@ -47,11 +47,11 @@ describe("doctorProject", () => {
     const report = await doctorProject(root);
     const messages = report.issues.map((issue) => issue.message);
 
-    expect(messages).toContain("AGENTS.md is missing. Run `contextforge sync`.");
-    expect(messages).toContain("CLAUDE.md is missing. Run `contextforge sync`.");
-    expect(messages).toContain(".cursor/rules is missing. Run `contextforge sync`.");
+    expect(messages).toContain("AGENTS.md is missing. Run `npx @contextforge/cli sync`.");
+    expect(messages).toContain("CLAUDE.md is missing. Run `npx @contextforge/cli sync`.");
+    expect(messages).toContain(".cursor/rules is missing. Run `npx @contextforge/cli sync`.");
     expect(messages).toContain(
-      ".github/copilot-instructions.md is missing. Run `contextforge sync`."
+      ".github/copilot-instructions.md is missing. Run `npx @contextforge/cli sync`."
     );
     expect(messages).toContain(
       "Config says package manager is npm, but pnpm was detected."
@@ -69,7 +69,7 @@ describe("doctorProject", () => {
     expect(report.issues).toEqual([
       {
         level: "error",
-        message: "ContextForge config was not found. Run `contextforge init`."
+        message: "ContextForge config was not found. Run `npx @contextforge/cli init`."
       }
     ]);
   });

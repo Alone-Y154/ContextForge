@@ -31,7 +31,7 @@ export async function doctorProject(root: string): Promise<DoctorReport> {
       issues: [
         {
           level: "error",
-          message: "ContextForge config was not found. Run `contextforge init`."
+          message: "ContextForge config was not found. Run `npx @contextforge/cli init`."
         }
       ]
     };
@@ -64,7 +64,7 @@ export async function doctorProject(root: string): Promise<DoctorReport> {
     } else {
       issues.push({
         level: "error",
-        message: `${relativePath} is missing. Run \`contextforge sync\`.`
+        message: `${relativePath} is missing. Run \`npx @contextforge/cli sync\`.`
       });
     }
   }

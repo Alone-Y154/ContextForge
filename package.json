@@ -6,7 +6,7 @@
   "scripts": {
     "build": "corepack pnpm -r build",
     "test": "corepack pnpm -r test",
-    "dev": "corepack pnpm --filter contextforge dev"
+    "dev": "corepack pnpm --filter @contextforge/cli dev"
   },
   "devDependencies": {
     "@types/fs-extra": "^11.0.4",

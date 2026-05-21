@@ -4,7 +4,7 @@ import { loadRemoteRegistry } from "./remoteRegistry.js";
 import type { LoadedPack } from "./registrySchema.js";
 
 export const OFFICIAL_REGISTRY_SOURCE = "official";
-export const OFFICIAL_REGISTRY_URL = "https://registry.contextforge.dev/index.json";
+export const OFFICIAL_REGISTRY_URL = "https://registry.contextforge.org/index.json";
 export const DEFAULT_REGISTRY_SOURCES = [OFFICIAL_REGISTRY_SOURCE];
 export const PROJECT_PACK_CACHE = ".contextforge/packs";
 

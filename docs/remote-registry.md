@@ -7,20 +7,20 @@ ContextForge is designed around a remote prompt registry. The npm package should
 Normal users should run:
 
 ```bash
-npx contextforge init
-npx contextforge add supabase
-npx contextforge sync
-npx contextforge doctor
+npx @contextforge/cli init
+npx @contextforge/cli add supabase
+npx @contextforge/cli sync
+npx @contextforge/cli doctor
 ```
 
-The package command is `npx contextforge ...` for one-off use. After a project installs it as a dev dependency, users can also run it through package scripts or `pnpm contextforge ...`.
+The package command is `npx @contextforge/cli ...` for one-off use. The installed binary is still named `contextforge`, so after installing it as a dev dependency users can run it through package scripts or `pnpm contextforge ...`.
 
 ## Source Order
 
 ContextForge loads packs in this order:
 
 1. Project cache: `.contextforge/packs/<pack-name>`
-2. Official registry: `https://registry.contextforge.dev/index.json`
+2. Official registry: `https://registry.contextforge.org/index.json`
 3. Extra registries passed with `--registry` or `CONTEXTFORGE_REGISTRY_URL`
 
 The project cache is not the product registry. It is only a local copy of installed packs so `sync` remains reproducible after installation.
@@ -30,8 +30,8 @@ The project cache is not the product registry. It is only a local copy of instal
 Use `--registry` only for private, company, or experimental registries:
 
 ```bash
-npx contextforge init --registry https://registry.example.com/index.json
-npx contextforge add analytics-fundamentals --registry https://registry.example.com/index.json
+npx @contextforge/cli init --registry https://registry.example.com/index.json
+npx @contextforge/cli add analytics-fundamentals --registry https://registry.example.com/index.json
 ```
 
 You can also set:

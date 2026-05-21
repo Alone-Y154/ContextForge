@@ -1,0 +1,30 @@
+{
+  "version": "1",
+  "packs": [
+    {
+      "name": "supabase",
+      "version": "1.0.0",
+      "baseUrl": "./packs/supabase/"
+    },
+    {
+      "name": "system-design",
+      "version": "1.0.0",
+      "baseUrl": "./packs/system-design/"
+    },
+    {
+      "name": "ui-fundamentals",
+      "version": "1.0.0",
+      "baseUrl": "./packs/ui-fundamentals/"
+    },
+    {
+      "name": "ux-fundamentals",
+      "version": "1.0.0",
+      "baseUrl": "./packs/ux-fundamentals/"
+    },
+    {
+      "name": "analytics",
+      "version": "1.0.0",
+      "baseUrl": "./packs/analytics/"
+    }
+  ]
+}
