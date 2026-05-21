@@ -1,7 +1,8 @@
 import path from "node:path";
+import fg from "fast-glob";
 import fs from "fs-extra";
 import type { PackageManager, ProjectAnalysis } from "../types.js";
-import { hasPackage, type PackageJson } from "../project/packageJson.js";
+import { hasPackage, readPackageJson, type PackageJson } from "../project/packageJson.js";
 import type { LoadedPack } from "./registrySchema.js";
 
 export function findPack(registry: LoadedPack[], packName: string): LoadedPack | undefined {
@@ -21,31 +22,43 @@ export function resolvePacks(packNames: string[], registry: LoadedPack[]): Loade
   });
 }
 
-export function recommendPacks(analysis: ProjectAnalysis, registry: LoadedPack[]): LoadedPack[] {
-  const names = new Set<string>();
+async function hasDetectFile(root: string, filePattern: string): Promise<boolean> {
+  if (filePattern.includes("*")) {
+    const matches = await fg(filePattern, {
+      cwd: root,
+      onlyFiles: false,
+      dot: true
+    });
 
-  names.add("env-secrets");
-
-  if (analysis.framework === "next-app-router") {
-    names.add("next-app-router");
+    return matches.length > 0;
   }
 
-  if (analysis.database.prisma) {
-    names.add("prisma-migrations");
+  return fs.pathExists(path.join(root, filePattern));
+}
+
+function hasDetectHints(pack: LoadedPack): boolean {
+  return Boolean(pack.detect?.files?.length || pack.detect?.packages?.length);
+}
+
+export async function recommendPacks(
+  analysis: ProjectAnalysis,
+  registry: LoadedPack[]
+): Promise<LoadedPack[]> {
+  const packageJson = await readPackageJson(analysis.root);
+  const recommended: LoadedPack[] = [];
+
+  for (const pack of registry) {
+    if (pack.name === "env-secrets") {
+      recommended.push(pack);
+      continue;
+    }
+
+    if (hasDetectHints(pack) && (await packMatchesProject(pack, analysis.root, packageJson))) {
+      recommended.push(pack);
+    }
   }
 
-  if (analysis.styling.shadcn) {
-    names.add("shadcn-ui");
-  }
-
-  if (analysis.testing.vitest || analysis.testing.jest || analysis.testing.playwright) {
-    names.add("testing-workflow");
-  }
-
-  return resolvePacks(
-    [...names].filter((name) => findPack(registry, name)),
-    registry
-  );
+  return recommended;
 }
 
 export async function packMatchesProject(
@@ -54,7 +67,7 @@ export async function packMatchesProject(
   packageJson: PackageJson | null
 ): Promise<boolean> {
   const fileChecks = await Promise.all(
-    pack.detect?.files?.map((filePattern) => fs.pathExists(path.join(root, filePattern))) ?? []
+    pack.detect?.files?.map((filePattern) => hasDetectFile(root, filePattern)) ?? []
   );
   const packageChecks =
     pack.detect?.packages?.map((packageName) => hasPackage(packageJson, packageName)) ?? [];

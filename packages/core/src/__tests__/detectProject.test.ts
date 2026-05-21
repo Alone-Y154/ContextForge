@@ -9,16 +9,14 @@ describe("detectProject", () => {
 
     await Promise.all([
       writeJson(path.join(root, "package.json"), {
-        dependencies: { next: "latest", prisma: "latest", "@prisma/client": "latest" }
+        dependencies: { next: "latest", prisma: "latest", "@prisma/client": "latest" },
+        devDependencies: { tailwindcss: "latest", vitest: "latest", "@playwright/test": "latest" }
       }),
       writeFile(path.join(root, "pnpm-lock.yaml")),
       writeFile(path.join(root, "tsconfig.json"), "{}"),
       writeFile(path.join(root, "app/page.tsx")),
-      writeFile(path.join(root, "tailwind.config.ts")),
       writeFile(path.join(root, "components.json"), "{}"),
       writeFile(path.join(root, "prisma/schema.prisma")),
-      writeFile(path.join(root, "vitest.config.ts")),
-      writeFile(path.join(root, "playwright.config.ts")),
       writeFile(path.join(root, "AGENTS.md")),
       writeFile(path.join(root, "CLAUDE.md")),
       writeFile(path.join(root, ".cursor/rules/project.mdc")),
@@ -62,5 +60,29 @@ describe("detectProject", () => {
 
     const viteAnalysis = await detectProject(viteRoot);
     expect(viteAnalysis.framework).toBe("vite-react");
+  });
+
+  it("detects Tailwind v4 and shadcn from package dependencies", async () => {
+    const root = await makeTempProject("tailwind-v4");
+
+    await writeJson(path.join(root, "package.json"), {
+      dependencies: {
+        next: "16.2.6",
+        shadcn: "^4.7.0"
+      },
+      devDependencies: {
+        tailwindcss: "^4",
+        "@tailwindcss/postcss": "^4",
+        typescript: "^5"
+      }
+    });
+    await writeFile(path.join(root, "package-lock.json"));
+    await writeFile(path.join(root, "tsconfig.json"), "{}");
+    await writeFile(path.join(root, "app/page.tsx"));
+
+    const analysis = await detectProject(root);
+
+    expect(analysis.framework).toBe("next-app-router");
+    expect(analysis.styling).toEqual({ tailwind: true, shadcn: true });
   });
 });

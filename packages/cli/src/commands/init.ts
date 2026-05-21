@@ -75,7 +75,7 @@ export async function initCommand(options: RegistryCommandOptions = {}): Promise
     detectProject(root),
     loadRegistry({ root, sources: registrySources })
   ]);
-  const recommended = recommendPacks(analysis, registry);
+  const recommended = await recommendPacks(analysis, registry);
 
   spinner.succeed("Project detected");
   console.log(formatAnalysis(analysis));
