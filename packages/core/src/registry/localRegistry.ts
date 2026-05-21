@@ -1,56 +1,63 @@
 import path from "node:path";
 import fs from "fs-extra";
-import { PackSchema, type LoadedPack } from "./registrySchema.js";
+import {
+  PackManifestSchema,
+  type InstalledPack,
+  type PackFile,
+  type PackFileType
+} from "./registrySchema.js";
 
-export type LocalRegistrySource = LoadedPack["source"];
+async function readOptional(filePath: string): Promise<string | undefined> {
+  return (await fs.pathExists(filePath)) ? fs.readFile(filePath, "utf8") : undefined;
+}
 
-export async function loadLocalRegistry(
-  registryRoot: string,
-  source: LocalRegistrySource
-): Promise<LoadedPack[]> {
-  if (!(await fs.pathExists(registryRoot))) {
+function normalizePackFilePath(file: PackFile): string {
+  return file.path.split(/[\\/]/u).join(path.sep);
+}
+
+export async function loadCachedPack(packRoot: string): Promise<InstalledPack | null> {
+  const manifestPath = path.join(packRoot, "pack.json");
+
+  if (!(await fs.pathExists(manifestPath))) {
+    return null;
+  }
+
+  const manifest = PackManifestSchema.parse(await fs.readJson(manifestPath));
+  const files: Partial<Record<PackFileType, string>> = {};
+
+  for (const file of manifest.files) {
+    const content = await readOptional(path.join(packRoot, normalizePackFilePath(file)));
+
+    if (content !== undefined) {
+      files[file.type] = content;
+    }
+  }
+
+  return {
+    manifest,
+    files
+  };
+}
+
+export async function loadCachedPacks(packsRoot: string): Promise<InstalledPack[]> {
+  if (!(await fs.pathExists(packsRoot))) {
     return [];
   }
 
-  const entries = await fs.readdir(registryRoot, { withFileTypes: true });
-  const packs: LoadedPack[] = [];
+  const entries = await fs.readdir(packsRoot, { withFileTypes: true });
+  const packs: InstalledPack[] = [];
 
   for (const entry of entries) {
     if (!entry.isDirectory()) {
       continue;
     }
 
-    const directory = path.join(registryRoot, entry.name);
-    const packPath = path.join(directory, "pack.json");
+    const pack = await loadCachedPack(path.join(packsRoot, entry.name));
 
-    if (!(await fs.pathExists(packPath))) {
-      continue;
+    if (pack) {
+      packs.push(pack);
     }
-
-    const parsed = PackSchema.parse(await fs.readJson(packPath));
-    const readOptional = async (fileName: string): Promise<string | undefined> => {
-      const filePath = path.join(directory, fileName);
-      return (await fs.pathExists(filePath)) ? fs.readFile(filePath, "utf8") : undefined;
-    };
-
-    const rules = await readOptional("rules.md");
-
-    if (!rules) {
-      throw new Error(`Pack "${parsed.name}" is missing rules.md`);
-    }
-
-    packs.push({
-      ...parsed,
-      directory,
-      source,
-      files: {
-        rules,
-        skill: await readOptional("skill.md"),
-        cursor: await readOptional("cursor.mdc"),
-        copilot: await readOptional("copilot.md")
-      }
-    });
   }
 
-  return packs;
+  return packs.sort((a, b) => a.manifest.name.localeCompare(b.manifest.name));
 }

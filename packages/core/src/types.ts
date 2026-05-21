@@ -23,6 +23,9 @@ export type ProjectAnalysis = {
     prisma: boolean;
     drizzle: boolean;
   };
+  services: {
+    supabase: boolean;
+  };
   testing: {
     vitest: boolean;
     jest: boolean;

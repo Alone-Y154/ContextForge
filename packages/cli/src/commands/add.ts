@@ -1,55 +1,59 @@
 import {
-  addPackToConfig,
-  cacheRemotePacks,
-  findPack,
+  fetchRegistry,
+  findPackSummary,
+  installPackAndSync,
   loadConfig,
-  loadRegistry,
-  packMatchesProject,
-  readPackageJson,
-  saveConfig,
-  syncProject
+  type ContextForgeConfig
 } from "@contextforge/core";
 import pc from "picocolors";
 import { formatGeneratedFiles } from "../format.js";
-import { resolveRegistrySources, type RegistryCommandOptions } from "../registryOptions.js";
+import { resolveRegistryUrl, type RegistryCommandOptions } from "../registryOptions.js";
 
-export async function addCommand(
-  packName: string,
-  options: RegistryCommandOptions = {}
-): Promise<void> {
+type AddOptions = RegistryCommandOptions & {
+  force?: boolean;
+  dryRun?: boolean;
+};
+
+async function loadOptionalConfig(root: string): Promise<ContextForgeConfig | undefined> {
+  try {
+    return await loadConfig(root);
+  } catch {
+    return undefined;
+  }
+}
+
+export async function addCommand(packName: string, options: AddOptions = {}): Promise<void> {
   const root = process.cwd();
-  const config = await loadConfig(root);
-  const registrySources = resolveRegistrySources(config, options);
-  const registry = await loadRegistry({ root, sources: registrySources });
-  const pack = findPack(registry, packName);
+  const config = await loadOptionalConfig(root);
+  const registryUrl = resolveRegistryUrl(config, options);
+  const registry = await fetchRegistry(registryUrl);
+  const summary = findPackSummary(registry, packName);
 
-  if (!pack) {
-    throw new Error(`Unknown pack "${packName}".`);
+  if (!summary) {
+    throw new Error(`Unknown ContextForge pack "${packName}". Run \`npx @contextforge/cli list\` to see available packs.`);
   }
 
-  const packageJson = await readPackageJson(root);
-  const compatible = await packMatchesProject(pack, root, packageJson);
-  const alreadyInstalled = config.packs.includes(packName);
-  const nextConfig = {
-    ...addPackToConfig(config, packName),
-    registries: registrySources
-  };
+  const alreadyConfigured = config?.installedPacks.includes(packName) ?? false;
 
-  if (!compatible) {
-    console.log(
-      pc.yellow(
-        `${packName} does not match the current project detection hints. Adding it anyway; run doctor if this was intentional.`
-      )
-    );
+  if (alreadyConfigured && !options.force) {
+    console.log(pc.yellow(`${packName} is already installed. Run \`npx @contextforge/cli sync\` to refresh it.`));
+    return;
   }
 
-  await cacheRemotePacks(root, [pack]);
-  await saveConfig(root, nextConfig);
-  const result = await syncProject(root, nextConfig);
+  if (options.dryRun) {
+    console.log(pc.cyan(`Dry run: ${packName} would be downloaded from ${registryUrl}.`));
+    console.log(pc.dim(`Pack path: ${summary.path}`));
+    return;
+  }
+
+  const result = await installPackAndSync(root, registryUrl, packName, {
+    force: options.force,
+    dryRun: false
+  });
 
   console.log(
-    alreadyInstalled
-      ? pc.yellow(`${packName} was already installed. Synced generated files.`)
+    result.alreadyInstalled
+      ? pc.green(`Reinstalled ${packName}.`)
       : pc.green(`Added ${packName}.`)
   );
   console.log(formatGeneratedFiles(result.generatedFiles));

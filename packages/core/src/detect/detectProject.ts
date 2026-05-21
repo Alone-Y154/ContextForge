@@ -46,6 +46,10 @@ export async function detectProject(root: string): Promise<ProjectAnalysis> {
     playwrightConfig ||
     hasPackage(packageJson, "@playwright/test") ||
     hasPackage(packageJson, "playwright");
+  const supabase =
+    hasPackage(packageJson, "@supabase/supabase-js") ||
+    hasPackage(packageJson, "@supabase/ssr") ||
+    hasPackage(packageJson, "@supabase/auth-helpers-nextjs");
 
   return {
     root: resolvedRoot,
@@ -57,6 +61,9 @@ export async function detectProject(root: string): Promise<ProjectAnalysis> {
       shadcn
     },
     database,
+    services: {
+      supabase
+    },
     testing: {
       vitest,
       jest,

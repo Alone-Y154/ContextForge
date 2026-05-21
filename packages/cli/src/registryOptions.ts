@@ -1,4 +1,4 @@
-import { DEFAULT_REGISTRY_SOURCES, type ContextForgeConfig } from "@contextforge/core";
+import { OFFICIAL_REGISTRY_URL, type ContextForgeConfig } from "@contextforge/core";
 
 export type RegistryCommandOptions = {
   registry?: string[];
@@ -19,6 +19,10 @@ export function resolveRegistrySources(
   config?: ContextForgeConfig,
   options?: RegistryCommandOptions
 ): string[] {
-  const configured = config?.registries?.length ? config.registries : DEFAULT_REGISTRY_SOURCES;
-  return [...new Set([...configured, ...envRegistries(), ...(options?.registry ?? [])])];
+  const configured = config?.registry ? [config.registry] : [OFFICIAL_REGISTRY_URL];
+  return [...new Set([...(options?.registry ?? []), ...envRegistries(), ...configured])];
+}
+
+export function resolveRegistryUrl(config?: ContextForgeConfig, options?: RegistryCommandOptions): string {
+  return resolveRegistrySources(config, options)[0] ?? OFFICIAL_REGISTRY_URL;
 }

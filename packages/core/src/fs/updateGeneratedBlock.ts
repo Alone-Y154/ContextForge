@@ -14,6 +14,10 @@ export function getGeneratedBlock(content: string): string | null {
   return content.match(blockPattern)?.[0] ?? null;
 }
 
+export function removeGeneratedBlock(content: string): string {
+  return content.replace(blockPattern, "").replace(/\s+$/u, "");
+}
+
 export function wrapGeneratedBlock(content: string): string {
   return `${GENERATED_BLOCK_START}\n${content.trim()}\n${GENERATED_BLOCK_END}`;
 }

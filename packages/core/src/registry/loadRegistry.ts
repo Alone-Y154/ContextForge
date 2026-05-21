@@ -1,7 +1,11 @@
 import path from "node:path";
-import { loadLocalRegistry } from "./localRegistry.js";
-import { loadRemoteRegistry } from "./remoteRegistry.js";
-import type { LoadedPack } from "./registrySchema.js";
+import { loadCachedPacks } from "./localRegistry.js";
+import {
+  fetchPackManifest,
+  fetchRegistry,
+  resolvePackUrl
+} from "./remoteRegistry.js";
+import type { InstalledPack, PackFileType, RegistryPackSummary } from "./registrySchema.js";
 
 export const OFFICIAL_REGISTRY_SOURCE = "official";
 export const OFFICIAL_REGISTRY_URL = "https://registry.contextforge.org/index.json";
@@ -14,47 +18,41 @@ export type LoadRegistryOptions = {
   timeoutMs?: number;
 };
 
-function mergePacks(packs: LoadedPack[]): LoadedPack[] {
-  const byName = new Map<string, LoadedPack>();
-
-  for (const pack of packs) {
-    if (!byName.has(pack.name)) {
-      byName.set(pack.name, pack);
-    }
-  }
-
-  return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name));
+function sourceToUrl(source: string): string {
+  return source === OFFICIAL_REGISTRY_SOURCE ? OFFICIAL_REGISTRY_URL : source;
 }
 
-async function loadRegistrySource(source: string, timeoutMs?: number): Promise<LoadedPack[]> {
-  if (source === OFFICIAL_REGISTRY_SOURCE) {
-    try {
-      return await loadRemoteRegistry(OFFICIAL_REGISTRY_URL, timeoutMs ?? 1_500);
-    } catch {
-      return [];
-    }
-  }
-
-  return loadRemoteRegistry(source, timeoutMs);
-}
-
-export async function loadRegistry(
-  input: string | LoadRegistryOptions = {}
-): Promise<LoadedPack[]> {
+export async function loadRegistry(input: string | LoadRegistryOptions = {}) {
   if (typeof input === "string") {
-    return mergePacks(await loadLocalRegistry(input, "local"));
+    return fetchRegistry(input);
   }
 
-  const sources = input.sources ?? DEFAULT_REGISTRY_SOURCES;
-  const packs: LoadedPack[] = [];
-
-  if (input.root) {
-    packs.push(...(await loadLocalRegistry(path.join(input.root, PROJECT_PACK_CACHE), "project-cache")));
-  }
-
-  for (const source of sources) {
-    packs.push(...(await loadRegistrySource(source, input.timeoutMs)));
-  }
-
-  return mergePacks(packs);
+  const source = input.sources?.[0] ?? OFFICIAL_REGISTRY_SOURCE;
+  return fetchRegistry(sourceToUrl(source), input.timeoutMs);
 }
+
+export function registrySourceToUrl(source?: string): string {
+  return sourceToUrl(source ?? OFFICIAL_REGISTRY_SOURCE);
+}
+
+export async function loadRemotePack(
+  registryUrl: string,
+  summary: RegistryPackSummary,
+  timeoutMs?: number
+): Promise<InstalledPack> {
+  const packUrl = resolvePackUrl(registryUrl, summary.path);
+  const manifest = await fetchPackManifest(packUrl, timeoutMs);
+
+  return {
+    manifest,
+    summary,
+    packUrl,
+    files: {}
+  };
+}
+
+export async function loadProjectPacks(root: string): Promise<InstalledPack[]> {
+  return loadCachedPacks(path.join(root, PROJECT_PACK_CACHE));
+}
+
+export type { PackFileType };

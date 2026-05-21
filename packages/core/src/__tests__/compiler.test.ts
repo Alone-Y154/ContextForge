@@ -2,10 +2,11 @@ import path from "node:path";
 import fs from "fs-extra";
 import { describe, expect, it } from "vitest";
 import { compileOutputs } from "../compiler/compileOutputs.js";
+import { writeGeneratedFiles } from "../compiler/writeGeneratedFiles.js";
 import { safeWriteFile } from "../fs/safeWriteFile.js";
 import { updateGeneratedBlock } from "../fs/updateGeneratedBlock.js";
 import type { ContextForgeConfig } from "../config/configSchema.js";
-import type { LoadedPack } from "../registry/registrySchema.js";
+import type { InstalledPack } from "../registry/registrySchema.js";
 import type { ProjectAnalysis } from "../types.js";
 import { makeTempProject, writeFile } from "./helpers.js";
 
@@ -22,6 +23,9 @@ const analysis: ProjectAnalysis = {
     prisma: true,
     drizzle: false
   },
+  services: {
+    supabase: false
+  },
   testing: {
     vitest: true,
     jest: false,
@@ -32,6 +36,59 @@ const analysis: ProjectAnalysis = {
     claudeMd: false,
     cursorRules: false,
     copilotInstructions: false
+  }
+};
+
+const prismaPack: InstalledPack = {
+  manifest: {
+    name: "prisma-migrations",
+    title: "Prisma Migration Workflow",
+    version: "1.0.0",
+    topic: "database",
+    description: "Rules for Prisma migrations.",
+    classification: "task-triggered",
+    files: [
+      {
+        type: "agents",
+        path: "agents.md",
+        output: ".contextforge/instructions/agents/prisma-migrations.md"
+      },
+      {
+        type: "claude",
+        path: "claude.md",
+        output: ".contextforge/instructions/claude/prisma-migrations.md"
+      },
+      {
+        type: "skill",
+        path: "skill.md",
+        output: ".agents/skills/prisma-migrations/SKILL.md"
+      },
+      {
+        type: "cursor",
+        path: "cursor.mdc",
+        output: ".cursor/rules/prisma-migrations.mdc"
+      },
+      {
+        type: "copilot",
+        path: "copilot.md",
+        output: ".github/instructions/prisma-migrations.instructions.md"
+      }
+    ],
+    outputs: {
+      globalRules: true,
+      agentsInstruction: true,
+      claudeInstruction: true,
+      skill: true,
+      cursorRule: true,
+      copilotInstruction: true
+    }
+  },
+  files: {
+    agents: "# Prisma Agent Summary",
+    claude: "# Prisma Claude Summary",
+    skill: "# Prisma Skill",
+    cursor: "# Prisma Cursor",
+    copilot: "# Prisma Copilot"
   }
 };
 
@@ -59,45 +116,101 @@ describe("compiler", () => {
     expect(content).toContain("Generated content");
   });
 
+  it("cleans stale generated files while preserving user-authored content", async () => {
+    const root = await makeTempProject("stale-cleanup");
+    const agentsPath = path.join(root, "AGENTS.md");
+    const skillPath = path.join(root, ".agents/skills/prisma-migrations/SKILL.md");
+
+    await writeFile(
+      agentsPath,
+      [
+        "# Existing agent notes",
+        "",
+        "Keep this guidance.",
+        "",
+        "<!-- contextforge:start -->",
+        "Old generated content",
+        "<!-- contextforge:end -->"
+      ].join("\n")
+    );
+    await writeFile(
+      skillPath,
+      [
+        "---",
+        "name: prisma-migrations",
+        "---",
+        "",
+        "<!-- contextforge:start -->",
+        "Old skill content",
+        "<!-- contextforge:end -->"
+      ].join("\n")
+    );
+
+    await writeGeneratedFiles(
+      root,
+      [{ path: "CLAUDE.md", content: "# Claude content" }],
+      ["AGENTS.md", ".agents/skills/prisma-migrations/SKILL.md"]
+    );
+
+    const agentsContent = await fs.readFile(agentsPath, "utf8");
+    expect(agentsContent).toContain("Keep this guidance.");
+    expect(agentsContent).not.toContain("Old generated content");
+    expect(await fs.pathExists(skillPath)).toBe(false);
+    expect(await fs.pathExists(path.join(root, "CLAUDE.md"))).toBe(true);
+  });
+
   it("only compiles outputs for enabled tools", async () => {
-    const packs: LoadedPack[] = [
-      {
-        name: "prisma-migrations",
-        title: "Prisma Migration Workflow",
-        description: "Rules for Prisma migrations.",
-        category: "database",
-        directory: "/registry/prisma-migrations",
-        source: "remote",
-        outputs: {
-          globalRules: true,
-          skill: true,
-          cursorRule: true,
-          copilotInstruction: true
-        },
-        files: {
-          rules: "# Prisma Rules",
-          skill: "# Prisma Skill",
-          cursor: "# Prisma Cursor",
-          copilot: "# Prisma Copilot"
-        }
-      }
-    ];
+    const packs: InstalledPack[] = [prismaPack];
     const config: ContextForgeConfig = {
       version: "0.1.0",
-      registries: ["official"],
+      registry: "https://registry.contextforge.org/index.json",
       tools: ["codex", "cursor"],
-      packs: ["prisma-migrations"],
-      packageManager: "pnpm",
+      installedPacks: ["prisma-migrations"],
+      defaultCorePacks: [],
       generatedFiles: []
     };
 
     const outputs = compileOutputs(config, packs, analysis).map((output) => output.path);
 
     expect(outputs).toContain("AGENTS.md");
+    expect(outputs).toContain(".contextforge/instructions/agents/prisma-migrations.md");
     expect(outputs).toContain(".agents/skills/prisma-migrations/SKILL.md");
-    expect(outputs).toContain(".cursor/rules/contextforge.mdc");
     expect(outputs).toContain(".cursor/rules/prisma-migrations.mdc");
     expect(outputs).not.toContain("CLAUDE.md");
-    expect(outputs).not.toContain(".github/copilot-instructions.md");
+    expect(outputs).not.toContain(".github/instructions/prisma-migrations.instructions.md");
+  });
+
+  it("compiles Claude instructions and skills when only Claude is enabled", async () => {
+    const config: ContextForgeConfig = {
+      version: "0.1.0",
+      registry: "https://registry.contextforge.org/index.json",
+      tools: ["claude"],
+      installedPacks: ["prisma-migrations"],
+      defaultCorePacks: [],
+      generatedFiles: []
+    };
+
+    const outputs = compileOutputs(config, [prismaPack], analysis).map((output) => output.path);
+
+    expect(outputs).toEqual([
+      ".contextforge/instructions/claude/prisma-migrations.md",
+      ".agents/skills/prisma-migrations/SKILL.md",
+      "CLAUDE.md"
+    ]);
+  });
+
+  it("does not compile skills for Cursor-only or Copilot-only output", async () => {
+    const config: ContextForgeConfig = {
+      version: "0.1.0",
+      registry: "https://registry.contextforge.org/index.json",
+      tools: ["copilot"],
+      installedPacks: ["prisma-migrations"],
+      defaultCorePacks: [],
+      generatedFiles: []
+    };
+
+    const outputs = compileOutputs(config, [prismaPack], analysis).map((output) => output.path);
+
+    expect(outputs).toEqual([".github/instructions/prisma-migrations.instructions.md"]);
   });
 });

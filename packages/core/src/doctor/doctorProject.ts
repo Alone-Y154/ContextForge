@@ -1,10 +1,13 @@
 import path from "node:path";
 import fs from "fs-extra";
+import { LOCK_PATH, loadLock } from "../config/lockFile.js";
 import { CONFIG_PATH, loadConfig } from "../config/loadConfig.js";
 import { detectProject } from "../detect/detectProject.js";
-import { readPackageJson, hasScript } from "../project/packageJson.js";
-import { loadRegistry } from "../registry/loadRegistry.js";
-import { packMatchesProject, resolvePacks } from "../registry/resolvePack.js";
+import { getGeneratedBlock } from "../fs/updateGeneratedBlock.js";
+import { hasScript, readPackageJson } from "../project/packageJson.js";
+import { fetchRegistry } from "../registry/remoteRegistry.js";
+import { loadProjectPacks } from "../registry/loadRegistry.js";
+import { packMatchesProject, recommendPackNames } from "../registry/resolvePack.js";
 
 export type DoctorIssue = {
   level: "error" | "warning";
@@ -16,11 +19,62 @@ export type DoctorReport = {
   issues: DoctorIssue[];
 };
 
+export type DoctorOptions = {
+  registry?: string;
+};
+
 async function fileExists(root: string, relativePath: string): Promise<boolean> {
   return fs.pathExists(path.join(root, relativePath));
 }
 
-export async function doctorProject(root: string): Promise<DoctorReport> {
+async function readIfExists(root: string, relativePath: string): Promise<string | null> {
+  const filePath = path.join(root, relativePath);
+
+  if (!(await fs.pathExists(filePath))) {
+    return null;
+  }
+
+  return fs.readFile(filePath, "utf8");
+}
+
+function hasContextForgeBlock(content: string | null): boolean {
+  return Boolean(content && getGeneratedBlock(content));
+}
+
+function tooLarge(content: string | null): boolean {
+  return Boolean(content && content.length > 20_000);
+}
+
+function expectedGeneratedOutputs(packName: string, tools: string[]): string[] {
+  const outputs: string[] = [];
+
+  if (tools.includes("codex") || tools.includes("claude")) {
+    outputs.push(`.agents/skills/${packName}/SKILL.md`);
+  }
+
+  if (tools.includes("cursor")) {
+    outputs.push(`.cursor/rules/${packName}.mdc`);
+  }
+
+  if (tools.includes("copilot")) {
+    outputs.push(`.github/instructions/${packName}.instructions.md`);
+  }
+
+  if (tools.includes("codex")) {
+    outputs.push(`.contextforge/instructions/agents/${packName}.md`);
+  }
+
+  if (tools.includes("claude")) {
+    outputs.push(`.contextforge/instructions/claude/${packName}.md`);
+  }
+
+  return outputs;
+}
+
+export async function doctorProject(
+  root: string,
+  options: DoctorOptions = {}
+): Promise<DoctorReport> {
   const checks: string[] = [];
   const issues: DoctorIssue[] = [];
   const resolvedRoot = path.resolve(root);
@@ -40,69 +94,145 @@ export async function doctorProject(root: string): Promise<DoctorReport> {
   checks.push("Config found");
 
   const config = await loadConfig(resolvedRoot);
-  const [analysis, registry, packageJson] = await Promise.all([
+  const registryUrl = options.registry ?? config.registry;
+  const [analysis, packageJson, lock] = await Promise.all([
     detectProject(resolvedRoot),
-    loadRegistry({ root: resolvedRoot, sources: config.registries }),
-    readPackageJson(resolvedRoot)
+    readPackageJson(resolvedRoot),
+    loadLock(resolvedRoot)
   ]);
-  const packs = resolvePacks(config.packs, registry);
 
-  const requiredFiles: Array<[boolean, string, string]> = [
-    [config.tools.includes("codex"), "AGENTS.md", "Codex instructions found"],
-    [config.tools.includes("claude"), "CLAUDE.md", "Claude instructions found"],
-    [config.tools.includes("cursor"), ".cursor/rules", "Cursor rules found"],
-    [config.tools.includes("copilot"), ".github/copilot-instructions.md", "Copilot instructions found"]
-  ];
+  let registryPacks = new Set<string>();
 
-  for (const [enabled, relativePath, okMessage] of requiredFiles) {
-    if (!enabled) {
+  try {
+    const registry = await fetchRegistry(registryUrl);
+    registryPacks = new Set(registry.packs.map((pack) => pack.name));
+    checks.push("Registry reachable");
+  } catch (error) {
+    issues.push({
+      level: "error",
+      message: `Registry ${registryUrl} is not reachable: ${error instanceof Error ? error.message : String(error)}`
+    });
+  }
+
+  if (lock) {
+    checks.push("Lock file found");
+  } else {
+    issues.push({
+      level: "warning",
+      message: `${LOCK_PATH} is missing. Run \`npx @contextforge/cli sync\`.`
+    });
+  }
+
+  const cachedPacks = await loadProjectPacks(resolvedRoot);
+  const cachedPackNames = new Set(cachedPacks.map((pack) => pack.manifest.name));
+
+  for (const packName of config.installedPacks) {
+    if (registryPacks.size > 0 && !registryPacks.has(packName)) {
+      issues.push({
+        level: "error",
+        message: `${packName} is installed in config, but no longer exists in the registry.`
+      });
+    }
+
+    if (!cachedPackNames.has(packName)) {
+      issues.push({
+        level: "error",
+        message: `.contextforge/packs/${packName}/pack.json is missing. Run \`npx @contextforge/cli sync\`.`
+      });
       continue;
     }
 
-    if (await fileExists(resolvedRoot, relativePath)) {
-      checks.push(okMessage);
+    for (const output of expectedGeneratedOutputs(packName, config.tools)) {
+      if (!(await fileExists(resolvedRoot, output))) {
+        issues.push({
+          level: "error",
+          message: `${output} is missing. Run \`npx @contextforge/cli sync\`.`
+        });
+      }
+    }
+  }
+
+  const agentsMd = await readIfExists(resolvedRoot, "AGENTS.md");
+  const claudeMd = await readIfExists(resolvedRoot, "CLAUDE.md");
+
+  if (config.tools.includes("codex")) {
+    if (hasContextForgeBlock(agentsMd)) {
+      checks.push("AGENTS.md ContextForge block found");
     } else {
       issues.push({
         level: "error",
-        message: `${relativePath} is missing. Run \`npx @contextforge/cli sync\`.`
+        message: "AGENTS.md is missing a ContextForge generated block. Run `npx @contextforge/cli sync`."
       });
     }
   }
 
-  for (const generatedFile of config.generatedFiles) {
-    if (!(await fileExists(resolvedRoot, generatedFile))) {
+  if (config.tools.includes("claude")) {
+    if (hasContextForgeBlock(claudeMd)) {
+      checks.push("CLAUDE.md ContextForge block found");
+    } else {
+      issues.push({
+        level: "error",
+        message: "CLAUDE.md is missing a ContextForge generated block. Run `npx @contextforge/cli sync`."
+      });
+    }
+  }
+
+  if (tooLarge(agentsMd)) {
+    issues.push({
+      level: "warning",
+      message: "AGENTS.md is large. Root instructions should stay concise; detailed content belongs in pack files and skills."
+    });
+  }
+
+  if (tooLarge(claudeMd)) {
+    issues.push({
+      level: "warning",
+      message: "CLAUDE.md is large. Root instructions should stay concise; detailed content belongs in pack files."
+    });
+  }
+
+  const gitWorkflow = cachedPacks.find((pack) => pack.manifest.name === "git-workflow");
+  if (gitWorkflow) {
+    const gitSummary = [gitWorkflow.files.agents, gitWorkflow.files.claude, agentsMd, claudeMd]
+      .filter((content): content is string => Boolean(content))
+      .join("\n")
+      .toLowerCase();
+
+    if (
+      !gitSummary.includes("do not commit") ||
+      !gitSummary.includes("push") ||
+      !gitSummary.includes("explicitly")
+    ) {
       issues.push({
         level: "warning",
-        message: `Previously generated file ${generatedFile} is missing.`
+        message: "git-workflow is installed, but the expected explicit-permission git safety warning was not found."
       });
     }
   }
 
-  for (const pack of packs) {
+  for (const pack of cachedPacks) {
     if (!(await packMatchesProject(pack, resolvedRoot, packageJson))) {
       issues.push({
         level: "warning",
-        message: `${pack.name} pack is installed, but its detection hints do not match this project.`
+        message: `${pack.manifest.name} is installed, but its detection hints do not match this project.`
       });
     }
   }
 
-  if (
-    config.packageManager !== "unknown" &&
-    analysis.packageManager !== "unknown" &&
-    config.packageManager !== analysis.packageManager
-  ) {
+  if (config.installedPacks.includes("test-driven-development") && !hasScript(packageJson, "test")) {
     issues.push({
       level: "warning",
-      message: `Config says package manager is ${config.packageManager}, but ${analysis.packageManager} was detected.`
+      message: "test-driven-development is installed, but package.json has no test script."
     });
   }
 
-  if (config.packs.includes("testing-workflow") && !hasScript(packageJson, "test")) {
-    issues.push({
-      level: "warning",
-      message: "testing-workflow is installed, but package.json has no test script."
-    });
+  for (const recommendedPack of recommendPackNames(analysis)) {
+    if (!config.installedPacks.includes(recommendedPack) && registryPacks.has(recommendedPack)) {
+      issues.push({
+        level: "warning",
+        message: `${recommendedPack} matches the detected stack but is not installed. Run \`npx @contextforge/cli add ${recommendedPack}\` if you want it.`
+      });
+    }
   }
 
   return { checks, issues };

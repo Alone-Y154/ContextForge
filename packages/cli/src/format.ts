@@ -24,6 +24,7 @@ export function formatAnalysis(analysis: ProjectAnalysis): string {
     `shadcn/ui: ${yesNo(analysis.styling.shadcn)}`,
     `Prisma: ${yesNo(analysis.database.prisma)}`,
     `Drizzle: ${yesNo(analysis.database.drizzle)}`,
+    `Supabase: ${yesNo(analysis.services.supabase)}`,
     `Testing: ${testing || "not detected"}`,
     ""
   ].join("\n");

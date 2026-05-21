@@ -2,8 +2,9 @@ import http from "node:http";
 import path from "node:path";
 import fs from "fs-extra";
 import { afterEach, describe, expect, it } from "vitest";
-import { cacheRemotePacks } from "../registry/installPacks.js";
-import { loadRegistry } from "../registry/loadRegistry.js";
+import { installPack } from "../registry/installPacks.js";
+import { loadProjectPacks } from "../registry/loadRegistry.js";
+import { fetchRegistry } from "../registry/remoteRegistry.js";
 import { makeTempProject, writeFile, writeJson } from "./helpers.js";
 
 const servers: http.Server[] = [];
@@ -11,7 +12,8 @@ const servers: http.Server[] = [];
 async function createStaticServer(root: string): Promise<string> {
   const server = http.createServer(async (request, response) => {
     const requestUrl = new URL(request.url ?? "/", "http://localhost");
-    const filePath = path.join(root, decodeURIComponent(requestUrl.pathname));
+    const relativePath = decodeURIComponent(requestUrl.pathname).replace(/^\/+/u, "");
+    const filePath = path.join(root, relativePath);
 
     if (!(await fs.pathExists(filePath))) {
       response.statusCode = 404;
@@ -55,11 +57,18 @@ describe("remote registry", () => {
 
     await writeJson(path.join(registryRoot, "index.json"), {
       version: "1",
+      topics: ["analytics"],
       packs: [
         {
           name: "analytics-fundamentals",
-          version: "1.0.0",
-          baseUrl: "./packs/analytics-fundamentals/"
+          title: "Analytics Fundamentals",
+          topic: "analytics",
+          description: "Rules for analytics instrumentation and event quality.",
+          path: "packs/analytics-fundamentals/pack.json",
+          source: {
+            provider: "contextforge",
+            license: "MIT"
+          }
         }
       ]
     });
@@ -67,32 +76,50 @@ describe("remote registry", () => {
       name: "analytics-fundamentals",
       version: "1.0.0",
       title: "Analytics Fundamentals",
+      topic: "analytics",
       description: "Rules for analytics instrumentation and event quality.",
-      category: "workflow",
+      classification: "task-triggered",
+      files: [
+        { type: "rules", path: "rules.md" },
+        {
+          type: "agents",
+          path: "agents.md",
+          output: ".contextforge/instructions/agents/analytics-fundamentals.md"
+        },
+        {
+          type: "skill",
+          path: "skill.md",
+          output: ".agents/skills/analytics-fundamentals/SKILL.md"
+        }
+      ],
       outputs: {
         globalRules: true,
+        agentsInstruction: true,
+        claudeInstruction: true,
         skill: true,
         cursorRule: true,
         copilotInstruction: true
       }
     });
     await writeFile(path.join(packRoot, "rules.md"), "# Analytics Rules");
+    await writeFile(path.join(packRoot, "agents.md"), "# Analytics Agent Summary");
     await writeFile(path.join(packRoot, "skill.md"), "# Analytics Skill");
 
     const registryUrl = await createStaticServer(registryRoot);
-    const packs = await loadRegistry({ root: projectRoot, sources: [registryUrl] });
-    const remotePack = packs.find((pack) => pack.name === "analytics-fundamentals");
+    const registry = await fetchRegistry(registryUrl);
 
-    expect(remotePack?.source).toBe("remote");
-    expect(remotePack?.version).toBe("1.0.0");
-    expect(remotePack?.files.rules).toContain("Analytics Rules");
+    expect(registry.packs.map((pack) => pack.name)).toEqual(["analytics-fundamentals"]);
 
-    await cacheRemotePacks(projectRoot, remotePack ? [remotePack] : []);
+    const result = await installPack(projectRoot, registryUrl, "analytics-fundamentals", {
+      force: true
+    });
 
-    const cachedPacks = await loadRegistry({ root: projectRoot, sources: [] });
-    const cachedPack = cachedPacks.find((pack) => pack.name === "analytics-fundamentals");
+    expect(result.manifest?.version).toBe("1.0.0");
 
-    expect(cachedPack?.source).toBe("project-cache");
+    const cachedPacks = await loadProjectPacks(projectRoot);
+    const cachedPack = cachedPacks.find((pack) => pack.manifest.name === "analytics-fundamentals");
+
+    expect(cachedPack?.files.rules).toContain("Analytics Rules");
     expect(cachedPack?.files.skill).toContain("Analytics Skill");
   });
 });

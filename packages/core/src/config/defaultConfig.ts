@@ -1,22 +1,26 @@
-import type { ContextForgeConfig } from "./configSchema.js";
-import type { ProjectAnalysis, AITool } from "../types.js";
-import type { LoadedPack } from "../registry/registrySchema.js";
-import { DEFAULT_REGISTRY_SOURCES } from "../registry/loadRegistry.js";
+import type { ProjectAnalysis } from "../types.js";
+import {
+  DEFAULT_CORE_PACKS,
+  DEFAULT_TOOLS,
+  type AITool,
+  type ContextForgeConfig
+} from "./configSchema.js";
+import { OFFICIAL_REGISTRY_URL } from "../registry/loadRegistry.js";
 
-export const DEFAULT_TOOLS: AITool[] = ["codex", "claude", "cursor", "copilot"];
+export { DEFAULT_CORE_PACKS, DEFAULT_TOOLS };
 
 export function createConfig(
-  analysis: ProjectAnalysis,
-  packs: LoadedPack[],
+  _analysis: ProjectAnalysis,
+  packs: { name: string }[],
   tools: AITool[] = DEFAULT_TOOLS,
-  registries: string[] = DEFAULT_REGISTRY_SOURCES
+  registry = OFFICIAL_REGISTRY_URL
 ): ContextForgeConfig {
   return {
     version: "0.1.0",
-    registries,
+    registry,
     tools,
-    packs: packs.map((pack) => pack.name),
-    packageManager: analysis.packageManager,
+    installedPacks: [...new Set(packs.map((pack) => pack.name))],
+    defaultCorePacks: [...DEFAULT_CORE_PACKS],
     generatedFiles: []
   };
 }

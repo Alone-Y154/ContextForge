@@ -1,13 +1,18 @@
 import {
-  PackSchema,
-  RemoteRegistryIndexSchema,
-  type LoadedPack,
-  type RemoteRegistryIndex
+  PackManifestSchema,
+  RegistryIndexSchema,
+  type PackFile,
+  type PackManifest,
+  type RegistryIndex,
+  type RegistryPackSummary
 } from "./registrySchema.js";
 
 const DEFAULT_TIMEOUT_MS = 10_000;
 
-async function fetchText(url: string, required: boolean, timeoutMs: number): Promise<string | undefined> {
+export async function fetchText(
+  url: string,
+  timeoutMs = DEFAULT_TIMEOUT_MS
+): Promise<string> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
@@ -15,85 +20,96 @@ async function fetchText(url: string, required: boolean, timeoutMs: number): Pro
     const response = await fetch(url, { signal: controller.signal });
 
     if (!response.ok) {
-      if (!required && response.status === 404) {
-        return undefined;
-      }
-
       throw new Error(`Failed to fetch ${url}: ${response.status} ${response.statusText}`);
     }
 
     return response.text();
-  } catch (error) {
-    if (!required) {
-      return undefined;
-    }
-
-    throw error;
   } finally {
     clearTimeout(timeout);
   }
 }
 
-function resolveUrl(value: string | undefined, baseUrl: string): string | undefined {
-  return value ? new URL(value, baseUrl).toString() : undefined;
+export function resolvePackUrl(registryUrl: string, packPath: string): string {
+  return new URL(packPath, registryUrl).toString();
 }
 
-function defaultPackFile(baseUrl: string | undefined, fileName: string): string | undefined {
-  return baseUrl ? new URL(fileName, baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`).toString() : undefined;
+export function resolvePackFileUrl(packUrl: string, filePath: string): string {
+  return new URL(filePath, packUrl).toString();
 }
 
-export async function loadRemoteRegistry(
+export async function fetchRegistry(
   registryUrl: string,
   timeoutMs = DEFAULT_TIMEOUT_MS
-): Promise<LoadedPack[]> {
-  const indexText = await fetchText(registryUrl, true, timeoutMs);
-  const index = RemoteRegistryIndexSchema.parse(JSON.parse(indexText ?? "{}")) as RemoteRegistryIndex;
-  const packs: LoadedPack[] = [];
+): Promise<RegistryIndex> {
+  const content = await fetchText(registryUrl, timeoutMs);
+  return RegistryIndexSchema.parse(JSON.parse(content));
+}
 
-  for (const entry of index.packs) {
-    const baseUrl = resolveUrl(entry.baseUrl, registryUrl);
-    const packUrl = resolveUrl(entry.files?.pack, registryUrl) ?? defaultPackFile(baseUrl, "pack.json");
-    const rawPack =
-      entry.pack ??
-      (packUrl ? JSON.parse((await fetchText(packUrl, true, timeoutMs)) ?? "{}") : undefined);
+export async function fetchPackManifest(
+  packUrl: string,
+  timeoutMs = DEFAULT_TIMEOUT_MS
+): Promise<PackManifest> {
+  const content = await fetchText(packUrl, timeoutMs);
+  return PackManifestSchema.parse(JSON.parse(content));
+}
 
-    const parsed = PackSchema.parse({
-      ...rawPack,
-      name: rawPack?.name ?? entry.name,
-      version: rawPack?.version ?? entry.version
-    });
+export function findPackSummary(
+  registry: RegistryIndex,
+  packName: string
+): RegistryPackSummary | undefined {
+  return registry.packs.find((pack) => pack.name === packName);
+}
 
-    const rulesUrl = resolveUrl(entry.files?.rules, registryUrl) ?? defaultPackFile(baseUrl, "rules.md");
+export async function fetchPackFile(
+  packUrl: string,
+  file: PackFile,
+  timeoutMs = DEFAULT_TIMEOUT_MS
+): Promise<string> {
+  return fetchText(resolvePackFileUrl(packUrl, file.path), timeoutMs);
+}
 
-    if (!rulesUrl) {
-      throw new Error(`Remote pack "${entry.name}" is missing a rules.md URL.`);
-    }
+function sortRegistryPacks(registry: RegistryIndex): RegistryPackSummary[] {
+  return [...registry.packs].sort((a, b) => a.topic.localeCompare(b.topic) || a.name.localeCompare(b.name));
+}
 
-    packs.push({
-      ...parsed,
-      directory: baseUrl ?? registryUrl,
-      source: "remote",
-      registryUrl,
-      files: {
-        rules: (await fetchText(rulesUrl, true, timeoutMs)) ?? "",
-        skill: await fetchText(
-          resolveUrl(entry.files?.skill, registryUrl) ?? defaultPackFile(baseUrl, "skill.md") ?? "",
-          false,
-          timeoutMs
-        ),
-        cursor: await fetchText(
-          resolveUrl(entry.files?.cursor, registryUrl) ?? defaultPackFile(baseUrl, "cursor.mdc") ?? "",
-          false,
-          timeoutMs
-        ),
-        copilot: await fetchText(
-          resolveUrl(entry.files?.copilot, registryUrl) ?? defaultPackFile(baseUrl, "copilot.md") ?? "",
-          false,
-          timeoutMs
-        )
-      }
-    });
+export function listRegistryPacks(registry: RegistryIndex): RegistryPackSummary[];
+export function listRegistryPacks(registryUrl: string): Promise<RegistryPackSummary[]>;
+export function listRegistryPacks(
+  input: RegistryIndex | string
+): RegistryPackSummary[] | Promise<RegistryPackSummary[]> {
+  if (typeof input === "string") {
+    return fetchRegistry(input).then(sortRegistryPacks);
   }
 
-  return packs;
+  return sortRegistryPacks(input);
+}
+
+export function searchRegistryPacks(
+  registry: RegistryIndex,
+  query: string
+): RegistryPackSummary[];
+export function searchRegistryPacks(
+  registryUrl: string,
+  query: string
+): Promise<RegistryPackSummary[]>;
+export function searchRegistryPacks(
+  input: RegistryIndex | string,
+  query: string
+): RegistryPackSummary[] | Promise<RegistryPackSummary[]> {
+  if (typeof input === "string") {
+    return fetchRegistry(input).then((registry) => searchRegistryPacks(registry, query));
+  }
+
+  const normalized = query.trim().toLowerCase();
+
+  if (!normalized) {
+    return sortRegistryPacks(input);
+  }
+
+  return sortRegistryPacks(input).filter((pack) =>
+    [pack.name, pack.title, pack.description, pack.topic]
+      .join(" ")
+      .toLowerCase()
+      .includes(normalized)
+  );
 }

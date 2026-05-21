@@ -1,62 +1,109 @@
 import path from "node:path";
 import fs from "fs-extra";
 import { PROJECT_PACK_CACHE } from "./loadRegistry.js";
-import type { LoadedPack, Pack } from "./registrySchema.js";
+import {
+  fetchPackFile,
+  fetchPackManifest,
+  fetchRegistry,
+  findPackSummary,
+  resolvePackUrl
+} from "./remoteRegistry.js";
+import type { InstalledPack, PackFile, PackFileType, PackManifest, RegistryPackSummary } from "./registrySchema.js";
 
-const INSTALLED_PACKS_PATH = ".contextforge/installed-packs.json";
+function normalizeRelativePath(relativePath: string): string {
+  return relativePath.split(/[\\/]/u).join(path.sep);
+}
 
-function packJson(pack: LoadedPack): Pack {
+function packRoot(projectRoot: string, packName: string): string {
+  return path.join(projectRoot, PROJECT_PACK_CACHE, packName);
+}
+
+function packFilePath(projectRoot: string, packName: string, file: PackFile): string {
+  return path.join(packRoot(projectRoot, packName), normalizeRelativePath(file.path));
+}
+
+export async function downloadPackToContextForge(
+  projectRoot: string,
+  packName: string,
+  packManifest: PackManifest,
+  packUrl: string,
+  timeoutMs?: number
+): Promise<InstalledPack> {
+  const root = packRoot(projectRoot, packName);
+  const files: Partial<Record<PackFileType, string>> = {};
+
+  await fs.ensureDir(root);
+  await fs.writeFile(path.join(root, "pack.json"), `${JSON.stringify(packManifest, null, 2)}\n`);
+
+  for (const file of packManifest.files) {
+    const content = await fetchPackFile(packUrl, file, timeoutMs);
+    const targetPath = packFilePath(projectRoot, packName, file);
+
+    await fs.ensureDir(path.dirname(targetPath));
+    await fs.writeFile(targetPath, content);
+    files[file.type] = content;
+  }
+
   return {
-    name: pack.name,
-    version: pack.version,
-    title: pack.title,
-    description: pack.description,
-    category: pack.category,
-    detect: pack.detect,
-    outputs: pack.outputs
+    manifest: packManifest,
+    packUrl,
+    files
   };
 }
 
-async function writePack(root: string, pack: LoadedPack): Promise<void> {
-  const packRoot = path.join(root, PROJECT_PACK_CACHE, pack.name);
+export type InstallPackOptions = {
+  force?: boolean;
+  dryRun?: boolean;
+  timeoutMs?: number;
+};
 
-  await fs.ensureDir(packRoot);
-  await fs.writeFile(path.join(packRoot, "pack.json"), `${JSON.stringify(packJson(pack), null, 2)}\n`);
-  await fs.writeFile(path.join(packRoot, "rules.md"), pack.files.rules);
+export type InstallPackResult = {
+  installed: boolean;
+  alreadyInstalled: boolean;
+  packName: string;
+  manifest?: PackManifest;
+  summary?: RegistryPackSummary;
+  packUrl?: string;
+};
 
-  const optionalFiles: Array<[string, string | undefined]> = [
-    ["skill.md", pack.files.skill],
-    ["cursor.mdc", pack.files.cursor],
-    ["copilot.md", pack.files.copilot]
-  ];
+export async function installPack(
+  projectRoot: string,
+  registryUrl: string,
+  packName: string,
+  options: InstallPackOptions = {}
+): Promise<InstallPackResult> {
+  const registry = await fetchRegistry(registryUrl, options.timeoutMs);
+  const summary = findPackSummary(registry, packName);
 
-  for (const [fileName, content] of optionalFiles) {
-    if (content) {
-      await fs.writeFile(path.join(packRoot, fileName), content);
-    }
+  if (!summary) {
+    throw new Error(`Unknown ContextForge pack: ${packName}`);
   }
-}
 
-export async function cacheRemotePacks(root: string, packs: LoadedPack[]): Promise<void> {
-  for (const pack of packs) {
-    if (pack.source === "remote") {
-      await writePack(root, pack);
-    }
+  const alreadyInstalled = await fs.pathExists(path.join(packRoot(projectRoot, packName), "pack.json"));
+  const packUrl = resolvePackUrl(registryUrl, summary.path);
+  const manifest = await fetchPackManifest(packUrl, options.timeoutMs);
+
+  if (alreadyInstalled && !options.force) {
+    return {
+      installed: false,
+      alreadyInstalled: true,
+      packName,
+      manifest,
+      summary,
+      packUrl
+    };
   }
-}
 
-export async function saveInstalledPacks(root: string, packs: LoadedPack[]): Promise<void> {
-  const metadataPath = path.join(root, INSTALLED_PACKS_PATH);
-  const metadata = {
-    version: "1",
-    packs: packs.map((pack) => ({
-      name: pack.name,
-      version: pack.version ?? "0.0.0",
-      source: pack.source,
-      registryUrl: pack.registryUrl
-    }))
+  if (!options.dryRun) {
+    await downloadPackToContextForge(projectRoot, packName, manifest, packUrl, options.timeoutMs);
+  }
+
+  return {
+    installed: !options.dryRun,
+    alreadyInstalled,
+    packName,
+    manifest,
+    summary,
+    packUrl
   };
-
-  await fs.ensureDir(path.dirname(metadataPath));
-  await fs.writeFile(metadataPath, `${JSON.stringify(metadata, null, 2)}\n`);
 }

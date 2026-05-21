@@ -12,6 +12,6 @@ export async function saveConfig(root: string, config: ContextForgeConfig): Prom
 export function addPackToConfig(config: ContextForgeConfig, packName: string): ContextForgeConfig {
   return {
     ...config,
-    packs: [...new Set([...config.packs, packName])]
+    installedPacks: [...new Set([...config.installedPacks, packName])]
   };
 }
