@@ -18,6 +18,7 @@ import {
   findPackSummary,
   resolvePackUrl
 } from "./registry/remoteRegistry.js";
+import { recommendPackNames } from "./registry/resolvePack.js";
 import type { InstalledPack, RegistryPackSummary } from "./registry/registrySchema.js";
 import type { GeneratedFile, ProjectAnalysis } from "./types.js";
 
@@ -96,8 +97,12 @@ export async function syncInstalledPacks(
   const registry = await fetchRegistry(config.registry);
   const installed: InstalledPack[] = [];
   const missing: string[] = [];
+  const detectedPackNames = recommendPackNames(analysis).filter((packName) =>
+    Boolean(findPackSummary(registry, packName))
+  );
+  const packNames = [...new Set([...config.installedPacks, ...detectedPackNames])];
 
-  for (const packName of config.installedPacks) {
+  for (const packName of packNames) {
     const summary = findPackSummary(registry, packName);
 
     if (!summary) {

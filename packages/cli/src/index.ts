@@ -15,7 +15,7 @@ const program = new Command();
 program
   .name("contextforge")
   .description("Make existing codebases AI-agent ready")
-  .version("0.1.8");
+  .version("0.1.9");
 
 program
   .command("init")
