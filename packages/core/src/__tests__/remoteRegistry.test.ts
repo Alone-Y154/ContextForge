@@ -2,8 +2,7 @@ import http from "node:http";
 import path from "node:path";
 import fs from "fs-extra";
 import { afterEach, describe, expect, it } from "vitest";
-import { installPack } from "../registry/installPacks.js";
-import { loadProjectPacks } from "../registry/loadRegistry.js";
+import { downloadPackToContextForge, installPack } from "../registry/installPacks.js";
 import { fetchRegistry } from "../registry/remoteRegistry.js";
 import { makeTempProject, writeFile, writeJson } from "./helpers.js";
 
@@ -50,7 +49,7 @@ afterEach(async () => {
 });
 
 describe("remote registry", () => {
-  it("loads a static remote registry and caches selected packs into the project", async () => {
+  it("loads a static remote registry and downloads selected pack files without writing a pack cache", async () => {
     const registryRoot = await makeTempProject("remote-registry");
     const packRoot = path.join(registryRoot, "packs/analytics-fundamentals");
     const projectRoot = await makeTempProject("remote-project");
@@ -116,10 +115,15 @@ describe("remote registry", () => {
 
     expect(result.manifest?.version).toBe("1.0.0");
 
-    const cachedPacks = await loadProjectPacks(projectRoot);
-    const cachedPack = cachedPacks.find((pack) => pack.manifest.name === "analytics-fundamentals");
+    const installedPack = await downloadPackToContextForge(
+      projectRoot,
+      "analytics-fundamentals",
+      result.manifest!,
+      result.packUrl!
+    );
 
-    expect(cachedPack?.files.rules).toContain("Analytics Rules");
-    expect(cachedPack?.files.skill).toContain("Analytics Skill");
+    expect(installedPack.files.rules).toContain("Analytics Rules");
+    expect(installedPack.files.skill).toContain("Analytics Skill");
+    expect(await fs.pathExists(path.join(projectRoot, ".contextforge/packs"))).toBe(false);
   });
 });

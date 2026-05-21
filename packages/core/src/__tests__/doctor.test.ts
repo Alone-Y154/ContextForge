@@ -24,60 +24,6 @@ function registryDataUrl(packNames: string[]): string {
   return `data:application/json,${encodeURIComponent(JSON.stringify(registry))}`;
 }
 
-async function writeCachedPack(root: string, packName: string, topic = "database"): Promise<void> {
-  const packRoot = path.join(root, ".contextforge/packs", packName);
-
-  await writeJson(path.join(packRoot, "pack.json"), {
-    name: packName,
-    title: packName,
-    version: "0.1.0",
-    topic,
-    description: `${packName} rules.`,
-    classification: "task-triggered",
-    detect: packName === "prisma-migrations" ? { files: ["prisma/schema.prisma"] } : undefined,
-    files: [
-      {
-        type: "agents",
-        path: "agents.md",
-        output: `.contextforge/instructions/agents/${packName}.md`
-      },
-      {
-        type: "claude",
-        path: "claude.md",
-        output: `.contextforge/instructions/claude/${packName}.md`
-      },
-      {
-        type: "skill",
-        path: "skill.md",
-        output: `.agents/skills/${packName}/SKILL.md`
-      },
-      {
-        type: "cursor",
-        path: "cursor.mdc",
-        output: `.cursor/rules/${packName}.mdc`
-      },
-      {
-        type: "copilot",
-        path: "copilot.md",
-        output: `.github/instructions/${packName}.instructions.md`
-      }
-    ],
-    outputs: {
-      globalRules: true,
-      agentsInstruction: true,
-      claudeInstruction: true,
-      skill: true,
-      cursorRule: true,
-      copilotInstruction: true
-    }
-  });
-  await writeFile(path.join(packRoot, "agents.md"), `# ${packName} agents`);
-  await writeFile(path.join(packRoot, "claude.md"), `# ${packName} claude`);
-  await writeFile(path.join(packRoot, "skill.md"), `# ${packName} skill`);
-  await writeFile(path.join(packRoot, "cursor.mdc"), `# ${packName} cursor`);
-  await writeFile(path.join(packRoot, "copilot.md"), `# ${packName} copilot`);
-}
-
 describe("doctorProject", () => {
   it("reports missing generated files and mismatched project state", async () => {
     const root = await makeTempProject("doctor");
@@ -87,9 +33,7 @@ describe("doctorProject", () => {
       writeFile(path.join(root, "pnpm-lock.yaml")),
       writeJson(path.join(root, "package.json"), {
         scripts: {}
-      }),
-      writeCachedPack(root, "prisma-migrations"),
-      writeCachedPack(root, "test-driven-development", "testing")
+      })
     ]);
     await saveConfig(root, {
       version: "0.1.0",
@@ -111,7 +55,7 @@ describe("doctorProject", () => {
     expect(messages).toContain(".contextforge/agents/cursor/prisma-migrations.md is missing. Run `npx @contextforge/cli sync`.");
     expect(messages).toContain(".contextforge/agents/copilot/prisma-migrations.md is missing. Run `npx @contextforge/cli sync`.");
     expect(messages).toContain("test-driven-development is installed, but package.json has no test script.");
-    expect(messages.some((message) => message.includes("prisma-migrations is installed"))).toBe(true);
+    expect(messages).toContain(".contextforge/lock.json is missing. Run `npx @contextforge/cli sync`.");
   });
 
   it("returns an error when config is missing", async () => {

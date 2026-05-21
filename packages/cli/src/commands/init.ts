@@ -5,12 +5,10 @@ import {
   createConfig,
   detectProject,
   fetchRegistry,
-  installPack,
   missingMandatoryCorePacks,
   recommendPacks,
   syncProject,
-  type AITool,
-  type RegistryPackSummary
+  type AITool
 } from "@contextforge/core";
 import ora from "ora";
 import pc from "picocolors";
@@ -49,18 +47,6 @@ async function selectTools(): Promise<AITool[]> {
   return selected === "all" ? DEFAULT_TOOLS : [selected];
 }
 
-function printRecommendedAddCommands(recommended: RegistryPackSummary[]): void {
-  if (recommended.length === 0) {
-    return;
-  }
-
-  console.log("");
-  console.log(pc.bold("Recommended packs:"));
-  for (const pack of recommended) {
-    console.log(`npx @contextforge/cli add ${pack.name}`);
-  }
-}
-
 export async function initCommand(options: RegistryCommandOptions = {}): Promise<void> {
   const root = process.cwd();
   const registryUrl = resolveRegistryUrl(undefined, options);
@@ -80,13 +66,10 @@ export async function initCommand(options: RegistryCommandOptions = {}): Promise
   const tools = await selectTools();
   const packNames = [
     ...new Set([
-      ...DEFAULT_CORE_PACKS.filter((packName) => registry.packs.some((pack) => pack.name === packName))
+      ...DEFAULT_CORE_PACKS.filter((packName) => registry.packs.some((pack) => pack.name === packName)),
+      ...recommended.map((pack) => pack.name)
     ])
   ];
-
-  for (const packName of packNames) {
-    await installPack(root, registryUrl, packName, { force: true });
-  }
 
   const initialConfig = createConfig(
     analysis,
@@ -98,5 +81,4 @@ export async function initCommand(options: RegistryCommandOptions = {}): Promise
 
   console.log(pc.green("ContextForge initialized."));
   console.log(formatGeneratedFiles(result.generatedFiles));
-  printRecommendedAddCommands(recommended);
 }

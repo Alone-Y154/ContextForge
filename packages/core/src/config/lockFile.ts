@@ -11,9 +11,13 @@ const LockSchema = z.object({
   packs: z.record(
     z.string(),
     z.object({
+      title: z.string().optional(),
       version: z.string(),
+      topic: z.string().optional(),
+      classification: z.string().optional(),
       path: z.string(),
-      source: z.string()
+      source: z.string(),
+      files: z.array(z.string()).optional()
     })
   )
 });
@@ -49,9 +53,13 @@ export async function updateContextForgeLock(
 
   for (const pack of installed) {
     lock.packs[pack.manifest.name] = {
+      title: pack.manifest.title,
       version: pack.manifest.version,
+      topic: pack.manifest.topic,
+      classification: pack.manifest.classification,
       path: pack.summary?.path ?? `packs/${pack.manifest.name}/pack.json`,
-      source: pack.packUrl ?? ""
+      source: pack.packUrl ?? "",
+      files: pack.manifest.files.map((file) => file.type)
     };
   }
 

@@ -6,8 +6,7 @@ import { detectProject } from "../detect/detectProject.js";
 import { getGeneratedBlock } from "../fs/updateGeneratedBlock.js";
 import { hasScript, readPackageJson } from "../project/packageJson.js";
 import { fetchRegistry } from "../registry/remoteRegistry.js";
-import { loadProjectPacks } from "../registry/loadRegistry.js";
-import { packMatchesProject, recommendPackNames } from "../registry/resolvePack.js";
+import { recommendPackNames } from "../registry/resolvePack.js";
 
 export type DoctorIssue = {
   level: "error" | "warning";
@@ -123,9 +122,6 @@ export async function doctorProject(
     });
   }
 
-  const cachedPacks = await loadProjectPacks(resolvedRoot);
-  const cachedPackNames = new Set(cachedPacks.map((pack) => pack.manifest.name));
-
   for (const packName of config.installedPacks) {
     if (registryPacks.size > 0 && !registryPacks.has(packName)) {
       issues.push({
@@ -134,12 +130,11 @@ export async function doctorProject(
       });
     }
 
-    if (!cachedPackNames.has(packName)) {
+    if (lock && !lock.packs[packName]) {
       issues.push({
-        level: "error",
-        message: `.contextforge/packs/${packName}/pack.json is missing. Run \`npx @contextforge/cli sync\`.`
+        level: "warning",
+        message: `${packName} is installed in config, but missing from ${LOCK_PATH}. Run \`npx @contextforge/cli sync\`.`
       });
-      continue;
     }
 
     for (const output of expectedGeneratedOutputs(packName, config.tools)) {
@@ -191,16 +186,13 @@ export async function doctorProject(
     });
   }
 
-  const gitWorkflow = cachedPacks.find((pack) => pack.manifest.name === "git-workflow");
-  if (gitWorkflow) {
+  if (config.installedPacks.includes("git-workflow")) {
     const generatedGitFiles = await Promise.all(
       ["codex", "claude", "cursor", "copilot"].map((tool) =>
         readIfExists(resolvedRoot, `.contextforge/agents/${tool}/git-workflow.md`)
       )
     );
     const gitSummary = [
-      gitWorkflow.files.agents,
-      gitWorkflow.files.claude,
       ...generatedGitFiles,
       agentsMd,
       claudeMd
@@ -217,15 +209,6 @@ export async function doctorProject(
       issues.push({
         level: "warning",
         message: "git-workflow is installed, but the expected explicit-permission git safety warning was not found."
-      });
-    }
-  }
-
-  for (const pack of cachedPacks) {
-    if (!(await packMatchesProject(pack, resolvedRoot, packageJson))) {
-      issues.push({
-        level: "warning",
-        message: `${pack.manifest.name} is installed, but its detection hints do not match this project.`
       });
     }
   }

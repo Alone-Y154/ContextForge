@@ -18,7 +18,6 @@ import {
   findPackSummary,
   resolvePackUrl
 } from "./registry/remoteRegistry.js";
-import { loadProjectPacks } from "./registry/loadRegistry.js";
 import type { InstalledPack, RegistryPackSummary } from "./registry/registrySchema.js";
 import type { GeneratedFile, ProjectAnalysis } from "./types.js";
 
@@ -82,6 +81,10 @@ async function loadInstalledPackFromRegistry(
   return downloadPackToContextForge(projectRoot, manifest.name, manifest, packUrl, timeoutMs);
 }
 
+async function removeLegacyPackCache(root: string): Promise<void> {
+  await fs.remove(path.join(root, ".contextforge/packs"));
+}
+
 export async function syncInstalledPacks(
   projectRoot: string,
   providedConfig?: ContextForgeConfig
@@ -104,6 +107,8 @@ export async function syncInstalledPacks(
 
     installed.push(await loadInstalledPackFromRegistry(root, config.registry, summary));
   }
+
+  await removeLegacyPackCache(root);
 
   const generatedFiles = await generateToolOutputs(
     root,
@@ -194,7 +199,19 @@ export async function installPackAndSync(
 }
 
 export async function readInstalledPacks(projectRoot: string): Promise<InstalledPack[]> {
-  return loadProjectPacks(projectRoot);
+  const config = await loadConfig(projectRoot);
+  const registry = await fetchRegistry(config.registry);
+  const installed: InstalledPack[] = [];
+
+  for (const packName of config.installedPacks) {
+    const summary = findPackSummary(registry, packName);
+
+    if (summary) {
+      installed.push(await loadInstalledPackFromRegistry(projectRoot, config.registry, summary));
+    }
+  }
+
+  return installed;
 }
 
 export async function pathExists(root: string, relativePath: string): Promise<boolean> {
