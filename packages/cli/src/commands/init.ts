@@ -1,4 +1,4 @@
-import { checkbox } from "@inquirer/prompts";
+import { select } from "@inquirer/prompts";
 import {
   DEFAULT_CORE_PACKS,
   DEFAULT_TOOLS,
@@ -35,22 +35,18 @@ async function selectTools(): Promise<AITool[]> {
     return DEFAULT_TOOLS;
   }
 
-  const selected = await checkbox<ToolSelection>({
+  const selected = await select<ToolSelection>({
     message: "Which AI tools should ContextForge configure?",
-    required: true,
     choices: [
-      { name: "All agents", value: "all", checked: true },
+      { name: "All agents", value: "all" },
       ...DEFAULT_TOOLS.map((tool) => ({
-        name: TOOL_LABELS[tool],
-        value: tool,
-        checked: false
+        name: `${TOOL_LABELS[tool]} only`,
+        value: tool
       }))
     ]
   });
 
-  return selected.includes("all")
-    ? DEFAULT_TOOLS
-    : selected.filter((tool): tool is AITool => tool !== "all");
+  return selected === "all" ? DEFAULT_TOOLS : [selected];
 }
 
 function printRecommendedAddCommands(recommended: RegistryPackSummary[]): void {
