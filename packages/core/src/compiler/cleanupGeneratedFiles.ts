@@ -5,7 +5,11 @@ import { getGeneratedBlock, removeGeneratedBlock } from "../fs/updateGeneratedBl
 function isGeneratedOnlyPath(relativePath: string): boolean {
   return (
     relativePath.startsWith(".agents/skills/") ||
-    relativePath.startsWith(".cursor/rules/")
+    relativePath.startsWith(".cursor/rules/") ||
+    relativePath.startsWith(".github/instructions/") ||
+    relativePath.startsWith(".contextforge/instructions/") ||
+    relativePath.startsWith(".contextforge/agents/") ||
+    relativePath.startsWith(".contextforge/skills/")
   );
 }
 

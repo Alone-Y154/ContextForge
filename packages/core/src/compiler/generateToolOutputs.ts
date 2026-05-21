@@ -9,10 +9,8 @@ import { compileAgentsMd } from "./compileAgentsMd.js";
 import { compileClaudeMd } from "./compileClaudeMd.js";
 
 const GENERATED_ONLY_PREFIXES = [
-  ".agents/skills/",
-  ".cursor/rules/",
-  ".github/instructions/",
-  ".contextforge/instructions/"
+  ".contextforge/agents/",
+  ".contextforge/skills/"
 ];
 
 function normalizeOutputPath(outputPath: string): string {
@@ -22,11 +20,11 @@ function normalizeOutputPath(outputPath: string): string {
 function defaultOutput(packName: string, type: PackFileType): string | null {
   const defaults: Record<PackFileType, string | null> = {
     rules: null,
-    agents: `.contextforge/instructions/agents/${packName}.md`,
-    claude: `.contextforge/instructions/claude/${packName}.md`,
-    skill: `.agents/skills/${packName}/SKILL.md`,
-    cursor: `.cursor/rules/${packName}.mdc`,
-    copilot: `.github/instructions/${packName}.instructions.md`
+    agents: `.contextforge/agents/codex/${packName}.md`,
+    claude: `.contextforge/agents/claude/${packName}.md`,
+    skill: `.contextforge/skills/${packName}/SKILL.md`,
+    cursor: `.contextforge/agents/cursor/${packName}.md`,
+    copilot: `.contextforge/agents/copilot/${packName}.md`
   };
 
   return defaults[type];
@@ -42,7 +40,7 @@ function shouldGenerateFile(type: PackFileType, tools: ContextForgeConfig["tools
   }
 
   if (type === "skill") {
-    return tools.includes("codex") || tools.includes("claude");
+    return tools.length > 0;
   }
 
   if (type === "cursor") {
@@ -58,7 +56,7 @@ function shouldGenerateFile(type: PackFileType, tools: ContextForgeConfig["tools
 
 function generatedFileFromPack(pack: InstalledPack, file: PackFile): GeneratedFile | null {
   const content = pack.files[file.type];
-  const outputPath = file.output ?? defaultOutput(pack.manifest.name, file.type);
+  const outputPath = defaultOutput(pack.manifest.name, file.type);
 
   if (!content || !outputPath) {
     return null;
@@ -66,8 +64,30 @@ function generatedFileFromPack(pack: InstalledPack, file: PackFile): GeneratedFi
 
   return {
     path: normalizeOutputPath(outputPath),
-    content
+    content: withContextForgePreamble(pack, file.type, content)
   };
+}
+
+function withContextForgePreamble(
+  pack: InstalledPack,
+  type: PackFileType,
+  content: string
+): string {
+  if (
+    pack.manifest.name !== "git-workflow" ||
+    !["agents", "claude", "cursor", "copilot"].includes(type)
+  ) {
+    return content;
+  }
+
+  const warning =
+    "Do not commit, push, merge, rebase, reset, delete branches, or rewrite history unless explicitly requested by the user.";
+
+  if (content.includes(warning)) {
+    return content;
+  }
+
+  return ["# ContextForge Git Safety", "", warning, "", content.trim()].join("\n");
 }
 
 async function writeGeneratedOnlyFile(root: string, output: GeneratedFile): Promise<void> {
@@ -104,11 +124,11 @@ export async function generateToolOutputs(
   const rootOutputs: GeneratedFile[] = [];
 
   if (config.tools.includes("codex")) {
-    rootOutputs.push({ path: "AGENTS.md", content: await compileAgentsMd(root, packs) });
+    rootOutputs.push({ path: "AGENTS.md", content: await compileAgentsMd() });
   }
 
   if (config.tools.includes("claude")) {
-    rootOutputs.push({ path: "CLAUDE.md", content: await compileClaudeMd(root, packs) });
+    rootOutputs.push({ path: "CLAUDE.md", content: await compileClaudeMd() });
   }
 
   for (const output of rootOutputs) {

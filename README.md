@@ -16,7 +16,7 @@ npx @contextforge/cli init
 https://registry.contextforge.org/index.json
 ```
 
-It installs the mandatory core behavior packs, stores downloaded pack sources under `.contextforge/packs`, writes `.contextforge/config.json` and `.contextforge/lock.json`, then generates tool-specific outputs for the AI tools you select.
+It installs the mandatory core behavior packs, stores ContextForge state under `.contextforge`, writes `.contextforge/config.json` and `.contextforge/lock.json`, then generates tool-specific instruction files for the AI tools you select.
 
 ## Commands
 
@@ -46,23 +46,16 @@ ContextForge uses `.contextforge` as the local source of truth:
 .contextforge/
   config.json
   lock.json
-  packs/
-  instructions/
-    agents/
-    claude/
+  agents/
+    codex/<pack>.md
+    claude/<pack>.md
+    cursor/<pack>.md
+    copilot/<pack>.md
+  skills/
+    <pack>/SKILL.md
 ```
 
-Generated AI-tool outputs live outside `.contextforge`:
-
-```txt
-AGENTS.md
-CLAUDE.md
-.agents/skills/<pack>/SKILL.md
-.cursor/rules/<pack>.mdc
-.github/instructions/<pack>.instructions.md
-```
-
-Root `AGENTS.md` and `CLAUDE.md` stay short. ContextForge updates only the block between:
+Root `AGENTS.md` and `CLAUDE.md` are tiny pointer files for agent auto-discovery. They tell the agent to read `.contextforge` instead of copying pack content into the root file. ContextForge updates only the block between:
 
 ```md
 <!-- contextforge:start -->

@@ -1,4 +1,4 @@
-import { checkbox, confirm } from "@inquirer/prompts";
+import { checkbox } from "@inquirer/prompts";
 import {
   DEFAULT_CORE_PACKS,
   DEFAULT_TOOLS,
@@ -25,13 +25,6 @@ const TOOL_LABELS: Record<AITool, string> = {
 };
 
 type ToolSelection = AITool | "all";
-
-const CAPABILITY_PACKS = [
-  "system-design",
-  "frontend-system-design",
-  "api-design",
-  "test-driven-development"
-];
 
 function canPrompt(): boolean {
   return Boolean(process.stdin.isTTY && process.stdout.isTTY);
@@ -60,61 +53,16 @@ async function selectTools(): Promise<AITool[]> {
     : selected.filter((tool): tool is AITool => tool !== "all");
 }
 
-async function selectRecommendedPacks(recommended: RegistryPackSummary[]): Promise<RegistryPackSummary[]> {
+function printRecommendedAddCommands(recommended: RegistryPackSummary[]): void {
   if (recommended.length === 0) {
-    return [];
+    return;
   }
 
-  if (!canPrompt()) {
-    return [];
+  console.log("");
+  console.log(pc.bold("Recommended packs:"));
+  for (const pack of recommended) {
+    console.log(`npx @contextforge/cli add ${pack.name}`);
   }
-
-  const wantsRecommendations = await confirm({
-    message: "Install recommended stack-specific packs?",
-    default: true
-  });
-
-  if (!wantsRecommendations) {
-    return [];
-  }
-
-  const selected = await checkbox<string>({
-    message: "Select recommended packs to install",
-    choices: recommended.map((pack) => ({
-      name: `${pack.title} (${pack.name})`,
-      value: pack.name,
-      description: pack.description,
-      checked: true
-    }))
-  });
-
-  return recommended.filter((pack) => selected.includes(pack.name));
-}
-
-async function selectCapabilityPacks(registryPacks: RegistryPackSummary[]): Promise<RegistryPackSummary[]> {
-  if (!canPrompt()) {
-    return [];
-  }
-
-  const available = CAPABILITY_PACKS.map((packName) =>
-    registryPacks.find((pack) => pack.name === packName)
-  ).filter((pack): pack is RegistryPackSummary => Boolean(pack));
-
-  if (available.length === 0) {
-    return [];
-  }
-
-  const selected = await checkbox<string>({
-    message: "Add optional architecture or testing packs?",
-    choices: available.map((pack) => ({
-      name: `${pack.title} (${pack.name})`,
-      value: pack.name,
-      description: pack.description,
-      checked: false
-    }))
-  });
-
-  return available.filter((pack) => selected.includes(pack.name));
 }
 
 export async function initCommand(options: RegistryCommandOptions = {}): Promise<void> {
@@ -133,22 +81,10 @@ export async function initCommand(options: RegistryCommandOptions = {}): Promise
     console.log("");
   }
 
-  if (recommended.length > 0) {
-    console.log(pc.bold("Recommended optional packs:"));
-    for (const pack of recommended) {
-      console.log(`${pc.green("OK")} ${pack.name}`);
-    }
-    console.log("");
-  }
-
   const tools = await selectTools();
-  const optionalPacks = await selectRecommendedPacks(recommended);
-  const capabilityPacks = await selectCapabilityPacks(registry.packs);
   const packNames = [
     ...new Set([
-      ...DEFAULT_CORE_PACKS.filter((packName) => registry.packs.some((pack) => pack.name === packName)),
-      ...optionalPacks.map((pack) => pack.name),
-      ...capabilityPacks.map((pack) => pack.name)
+      ...DEFAULT_CORE_PACKS.filter((packName) => registry.packs.some((pack) => pack.name === packName))
     ])
   ];
 
@@ -166,4 +102,5 @@ export async function initCommand(options: RegistryCommandOptions = {}): Promise
 
   console.log(pc.green("ContextForge initialized."));
   console.log(formatGeneratedFiles(result.generatedFiles));
+  printRecommendedAddCommands(recommended);
 }

@@ -105,9 +105,11 @@ describe("doctorProject", () => {
 
     expect(messages).toContain("AGENTS.md is missing a ContextForge generated block. Run `npx @contextforge/cli sync`.");
     expect(messages).toContain("CLAUDE.md is missing a ContextForge generated block. Run `npx @contextforge/cli sync`.");
-    expect(messages).toContain(".agents/skills/prisma-migrations/SKILL.md is missing. Run `npx @contextforge/cli sync`.");
-    expect(messages).toContain(".cursor/rules/prisma-migrations.mdc is missing. Run `npx @contextforge/cli sync`.");
-    expect(messages).toContain(".github/instructions/prisma-migrations.instructions.md is missing. Run `npx @contextforge/cli sync`.");
+    expect(messages).toContain(".contextforge/skills/prisma-migrations/SKILL.md is missing. Run `npx @contextforge/cli sync`.");
+    expect(messages).toContain(".contextforge/agents/codex/prisma-migrations.md is missing. Run `npx @contextforge/cli sync`.");
+    expect(messages).toContain(".contextforge/agents/claude/prisma-migrations.md is missing. Run `npx @contextforge/cli sync`.");
+    expect(messages).toContain(".contextforge/agents/cursor/prisma-migrations.md is missing. Run `npx @contextforge/cli sync`.");
+    expect(messages).toContain(".contextforge/agents/copilot/prisma-migrations.md is missing. Run `npx @contextforge/cli sync`.");
     expect(messages).toContain("test-driven-development is installed, but package.json has no test script.");
     expect(messages.some((message) => message.includes("prisma-migrations is installed"))).toBe(true);
   });

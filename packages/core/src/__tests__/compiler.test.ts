@@ -173,10 +173,12 @@ describe("compiler", () => {
     const outputs = compileOutputs(config, packs, analysis).map((output) => output.path);
 
     expect(outputs).toContain("AGENTS.md");
-    expect(outputs).toContain(".contextforge/instructions/agents/prisma-migrations.md");
-    expect(outputs).toContain(".agents/skills/prisma-migrations/SKILL.md");
-    expect(outputs).toContain(".cursor/rules/prisma-migrations.mdc");
+    expect(outputs).toContain(".contextforge/agents/codex/prisma-migrations.md");
+    expect(outputs).toContain(".contextforge/skills/prisma-migrations/SKILL.md");
+    expect(outputs).toContain(".contextforge/agents/cursor/prisma-migrations.md");
     expect(outputs).not.toContain("CLAUDE.md");
+    expect(outputs).not.toContain(".agents/skills/prisma-migrations/SKILL.md");
+    expect(outputs).not.toContain(".cursor/rules/prisma-migrations.mdc");
     expect(outputs).not.toContain(".github/instructions/prisma-migrations.instructions.md");
   });
 
@@ -193,13 +195,13 @@ describe("compiler", () => {
     const outputs = compileOutputs(config, [prismaPack], analysis).map((output) => output.path);
 
     expect(outputs).toEqual([
-      ".contextforge/instructions/claude/prisma-migrations.md",
-      ".agents/skills/prisma-migrations/SKILL.md",
+      ".contextforge/agents/claude/prisma-migrations.md",
+      ".contextforge/skills/prisma-migrations/SKILL.md",
       "CLAUDE.md"
     ]);
   });
 
-  it("does not compile skills for Cursor-only or Copilot-only output", async () => {
+  it("compiles Copilot instructions and skills without GitHub outputs", async () => {
     const config: ContextForgeConfig = {
       version: "0.1.0",
       registry: "https://registry.contextforge.org/index.json",
@@ -211,6 +213,37 @@ describe("compiler", () => {
 
     const outputs = compileOutputs(config, [prismaPack], analysis).map((output) => output.path);
 
-    expect(outputs).toEqual([".github/instructions/prisma-migrations.instructions.md"]);
+    expect(outputs).toEqual([
+      ".contextforge/skills/prisma-migrations/SKILL.md",
+      ".contextforge/agents/copilot/prisma-migrations.md"
+    ]);
+  });
+
+  it("compiles all agent-specific files when all tools are enabled", async () => {
+    const config: ContextForgeConfig = {
+      version: "0.1.0",
+      registry: "https://registry.contextforge.org/index.json",
+      tools: ["codex", "claude", "cursor", "copilot"],
+      installedPacks: ["prisma-migrations"],
+      defaultCorePacks: [],
+      generatedFiles: []
+    };
+
+    const outputs = compileOutputs(config, [prismaPack], analysis);
+    const paths = outputs.map((output) => output.path);
+    const agentsContent = outputs.find((output) => output.path === "AGENTS.md")?.content;
+
+    expect(paths).toContain("AGENTS.md");
+    expect(paths).toContain("CLAUDE.md");
+    expect(paths).toContain(".contextforge/agents/codex/prisma-migrations.md");
+    expect(paths).toContain(".contextforge/agents/claude/prisma-migrations.md");
+    expect(paths).toContain(".contextforge/agents/cursor/prisma-migrations.md");
+    expect(paths).toContain(".contextforge/agents/copilot/prisma-migrations.md");
+    expect(paths).toContain(".contextforge/skills/prisma-migrations/SKILL.md");
+    expect(paths).not.toContain(".agents/skills/prisma-migrations/SKILL.md");
+    expect(paths).not.toContain(".cursor/rules/prisma-migrations.mdc");
+    expect(paths).not.toContain(".github/instructions/prisma-migrations.instructions.md");
+    expect(agentsContent).toContain(".contextforge/agents/codex/");
+    expect(agentsContent).not.toContain("Prisma Agent Summary");
   });
 });

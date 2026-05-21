@@ -48,24 +48,24 @@ function tooLarge(content: string | null): boolean {
 function expectedGeneratedOutputs(packName: string, tools: string[]): string[] {
   const outputs: string[] = [];
 
-  if (tools.includes("codex") || tools.includes("claude")) {
-    outputs.push(`.agents/skills/${packName}/SKILL.md`);
-  }
-
-  if (tools.includes("cursor")) {
-    outputs.push(`.cursor/rules/${packName}.mdc`);
-  }
-
-  if (tools.includes("copilot")) {
-    outputs.push(`.github/instructions/${packName}.instructions.md`);
+  if (tools.length > 0) {
+    outputs.push(`.contextforge/skills/${packName}/SKILL.md`);
   }
 
   if (tools.includes("codex")) {
-    outputs.push(`.contextforge/instructions/agents/${packName}.md`);
+    outputs.push(`.contextforge/agents/codex/${packName}.md`);
   }
 
   if (tools.includes("claude")) {
-    outputs.push(`.contextforge/instructions/claude/${packName}.md`);
+    outputs.push(`.contextforge/agents/claude/${packName}.md`);
+  }
+
+  if (tools.includes("cursor")) {
+    outputs.push(`.contextforge/agents/cursor/${packName}.md`);
+  }
+
+  if (tools.includes("copilot")) {
+    outputs.push(`.contextforge/agents/copilot/${packName}.md`);
   }
 
   return outputs;
@@ -193,7 +193,18 @@ export async function doctorProject(
 
   const gitWorkflow = cachedPacks.find((pack) => pack.manifest.name === "git-workflow");
   if (gitWorkflow) {
-    const gitSummary = [gitWorkflow.files.agents, gitWorkflow.files.claude, agentsMd, claudeMd]
+    const generatedGitFiles = await Promise.all(
+      ["codex", "claude", "cursor", "copilot"].map((tool) =>
+        readIfExists(resolvedRoot, `.contextforge/agents/${tool}/git-workflow.md`)
+      )
+    );
+    const gitSummary = [
+      gitWorkflow.files.agents,
+      gitWorkflow.files.claude,
+      ...generatedGitFiles,
+      agentsMd,
+      claudeMd
+    ]
       .filter((content): content is string => Boolean(content))
       .join("\n")
       .toLowerCase();

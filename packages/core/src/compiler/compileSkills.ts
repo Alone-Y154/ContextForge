@@ -1,25 +1,11 @@
+import type { InstalledPack } from "../registry/registrySchema.js";
 import type { GeneratedFile } from "../types.js";
-import type { LoadedPack } from "../registry/registrySchema.js";
-import { GENERATED_BLOCK_END, GENERATED_BLOCK_START } from "../fs/updateGeneratedBlock.js";
 
-function escapeYaml(value: string): string {
-  return value.replace(/"/g, '\\"');
-}
-
-export function compileSkills(packs: LoadedPack[]): GeneratedFile[] {
+export function compileSkills(packs: InstalledPack[]): GeneratedFile[] {
   return packs
-    .filter((pack) => pack.outputs.skill)
+    .filter((pack) => pack.manifest.outputs.skill && pack.files.skill)
     .map((pack) => ({
-      path: `.agents/skills/${pack.name}/SKILL.md`,
-      content: [
-        "---",
-        `name: ${pack.name}`,
-        `description: "${escapeYaml(pack.description)}"`,
-        "---",
-        "",
-        GENERATED_BLOCK_START,
-        (pack.files.skill ?? pack.files.rules).trim(),
-        GENERATED_BLOCK_END
-      ].join("\n")
+      path: `.contextforge/skills/${pack.manifest.name}/SKILL.md`,
+      content: pack.files.skill?.trim() ?? ""
     }));
 }
