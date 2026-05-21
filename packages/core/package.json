@@ -1,7 +1,30 @@
 {
   "name": "@contextforge/core",
-  "version": "0.1.9",
+  "version": "0.1.10",
+  "description": "Core detection, registry, sync, and generation logic for ContextForge.",
   "type": "module",
+  "homepage": "https://contextforge.org",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Alone-Y154/ContextForge.git",
+    "directory": "packages/core"
+  },
+  "bugs": {
+    "url": "https://github.com/Alone-Y154/ContextForge/issues"
+  },
+  "keywords": [
+    "ai",
+    "agents",
+    "codex",
+    "claude-code",
+    "cursor",
+    "github-copilot",
+    "developer-tools",
+    "cli",
+    "prompt-engineering",
+    "typescript"
+  ],
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -11,7 +34,8 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "README.md"
   ],
   "scripts": {
     "build": "tsup src/index.ts --format esm --dts --clean",

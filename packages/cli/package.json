@@ -1,12 +1,36 @@
 {
   "name": "@contextforge/cli",
-  "version": "0.1.9",
+  "version": "0.1.10",
+  "description": "CLI that installs curated AI-agent instruction packs into existing codebases.",
   "type": "module",
+  "homepage": "https://contextforge.org",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Alone-Y154/ContextForge.git",
+    "directory": "packages/cli"
+  },
+  "bugs": {
+    "url": "https://github.com/Alone-Y154/ContextForge/issues"
+  },
+  "keywords": [
+    "ai",
+    "agents",
+    "codex",
+    "claude-code",
+    "cursor",
+    "github-copilot",
+    "developer-tools",
+    "cli",
+    "prompt-engineering",
+    "typescript"
+  ],
   "bin": {
     "contextforge": "dist/index.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "README.md"
   ],
   "scripts": {
     "dev": "tsx src/index.ts",
